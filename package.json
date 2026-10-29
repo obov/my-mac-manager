@@ -44,5 +44,14 @@
     "esbuild": "^0.28.2",
     "smol-toml": "^1.9.1",
     "typescript": "^7.0.2"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/obov/my-mac-manager.git"
+  },
+  "homepage": "https://github.com/obov/my-mac-manager#readme",
+  "bugs": {
+    "url": "https://github.com/obov/my-mac-manager/issues"
+  },
+  "author": "Mark (https://github.com/obov)"
 }
