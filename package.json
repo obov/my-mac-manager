@@ -1,6 +1,6 @@
 {
   "name": "my-mac-manager",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Manage a headless Mac (mini, EC2 Mac) from another machine: status, control, backup, reboot, bootstrap. Pluggable vault, backup and service checks.",
   "type": "module",
   "bin": {

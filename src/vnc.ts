@@ -6,7 +6,7 @@ import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import net from "node:net";
 import { sleep } from "./util.js";
 
-const KEY_RETURN = 0xff0d, KEY_SHIFT = 0xffe1;
+const KEY_RETURN = 0xff0d, KEY_SHIFT = 0xffe1, KEY_BACKSPACE = 0xff08;
 
 class Reader {
   private buf = Buffer.alloc(0);
@@ -87,6 +87,13 @@ export async function vncLogin(host: string, user: string, pw: string) {
       sock.write(b);
     };
     const tap = async (sym: number) => { keyEv(sym, true); keyEv(sym, false); await sleep(30); };
+    // screensharingd maps keysyms to key codes without adding Shift → hold Shift explicitly (US layout)
+    const type = async (ch: string) => {
+      if (!/[A-Z~!@#$%^&*()_+{}|:"<>?]/.test(ch)) return tap(ch.codePointAt(0)!);
+      keyEv(KEY_SHIFT, true); await sleep(20);
+      await tap(ch.codePointAt(0)!);
+      keyEv(KEY_SHIFT, false); await sleep(20);
+    };
     // wake the display: pointer move + Shift
     const ptr = Buffer.alloc(6);
     ptr[0] = 5; ptr[1] = 0; ptr.writeUInt16BE(w >> 1, 2); ptr.writeUInt16BE(h >> 1, 4);
@@ -94,7 +101,8 @@ export async function vncLogin(host: string, user: string, pw: string) {
     await tap(KEY_SHIFT);
     await sleep(2000);
     // login window with a single user → password field has focus
-    for (const ch of pw) await tap(ch.codePointAt(0)!);
+    for (let i = 0; i < 64; i++) await tap(KEY_BACKSPACE);   // clear leftovers from an earlier attempt
+    for (const ch of pw) await type(ch);
     await tap(KEY_RETURN);
     await sleep(3000);
     console.log("password keystrokes sent");
