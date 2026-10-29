@@ -145,6 +145,8 @@ export interface Backup {
   restore(what: "secrets" | "dirs" | "data", o: { name?: string; force?: boolean; target?: string }): Promise<number>;
   /** shell command restoring project data before its setup during bootstrap (runs on the target Mac) */
   restoreDataCommand(name: string): string;
+  /** extra restore commands for a project during bootstrap, before its setup (e.g. from plugin-specific project keys) */
+  projectRestoreCommands?(p: Project): string[];
   remoteFiles?(): RemoteFile[];
   /** settings installed on the target Mac (backup entry of config.json) */
   remoteOptions?(): Dict;

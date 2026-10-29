@@ -4,7 +4,8 @@ A CLI for managing a headless Mac (Mac mini, EC2 Mac) over ssh from another mach
 status checks, service control, backups, FileVault-aware reboots and rebuilding a new Mac (bootstrap).
 
 - The engine (this package) and your setup (`m3.toml` + your own plugins) live in separate repositories
-- Vault (Bitwarden, ...), backup (restic, ...) and service checks are plugins you can swap or add → [PLUGINS.md](PLUGINS.md)
+- `m3.toml` holds values only (like Terraform variables): services, repos, secrets, brew packages, tools, launchd jobs. All logic lives in m3 and its plugins
+- Vault (Bitwarden, ...), backup (restic, ...) and service checks are plugins you can swap or add → [PLUGINS.md](PLUGINS.md), examples in [examples/plugins](examples/plugins)
 
 ## Install
 
@@ -52,10 +53,10 @@ ssh = "mini"                 # required. Host from ~/.ssh/config
 hostname = "my-mac"          # set by m3 host apply
 vnc_host = "100.x.y.z"       # address for m3 login (a Tailscale IP is recommended)
 screen_sharing = "vnc://my-mac.local"
-brewfile = "host/Brewfile"   # bootstrap: brew bundle
-tools = "host/tools.sh"      # bootstrap: tools installed outside brew
-settings = "host/extra.sh"   # extra checks for m3 host (check / note / ok functions)
-launchd = ["launchd"]        # plist files / dirs to deploy (__HOME__ and __DIR__ substituted)
+# brewfile = "host/Brewfile" # alternative to [brew]
+# tools = "host/tools.sh"    # alternative to [[tools]]
+# settings = "host/extra.sh" # extra checks for m3 host (check / note / ok functions)
+# launchd = ["launchd"]      # plist files / dirs, alternative to [[projects.<name>.agents]]
 secrets = ["~/.ssh/id_ed25519"]   # secrets to back up
 dirs = ["~/notes"]                # directories to back up (tar)
 dirs_exclude = ["node_modules"]
@@ -71,6 +72,17 @@ use = "restic"
 required = ["RESTIC_REPOSITORY", "RESTIC_PASSWORD", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
 aliases = { "encrypt token" = "RESTIC_PASSWORD" }   # vault field name → key
 schedule = { hour = 4, minute = 30 }
+
+[brew]                       # rendered into a Brewfile (bootstrap: brew bundle)
+taps = ["owner/tap"]
+formulae = ["restic", { name = "node@24", link = true }]
+casks = []
+mas = { "App Name" = 123456789 }
+
+[[tools]]                    # installed outside brew during bootstrap; skipped when bin / check passes
+name = "bun"
+bin = "~/.bun/bin/bun"       # or check = "<shell test>"
+install = "curl -fsSL https://bun.sh/install | bash"   # or manual = "message"
 
 [audit]
 root = "~/Dev"               # list directories here that m3.toml does not reference
@@ -104,6 +116,16 @@ dirs = ["~/Dev/web/data"]
 data_backup = "docker exec db pg_dumpall -U postgres"     # dump to stdout
 data_restore = "docker exec -i db psql -U postgres"       # restore from stdin
 setup = ["cd ~/Dev/web && npm ci"]                        # run during bootstrap ($M3_DIR available)
+restore_snapshot = { tag = "web", host = "oldmac", repo_suffix = false, paths = ["data"], target = "~/web" }   # restic: copy dirs from another backup during bootstrap (m3 restore-snapshot web)
+
+[[projects.web.agents]]            # launchd plist rendered from values (~/ → $HOME)
+label = "com.me.web"
+program = ["/opt/homebrew/bin/node", "~/Dev/web/server.js"]
+working_dir = "~/Dev/web"
+env = { PORT = "8080", PATH = "/opt/homebrew/bin:/usr/bin:/bin" }
+run_at_load = true
+keep_alive = true                  # also: throttle, interval, calendar = { Hour = 4, Minute = 30 }, log, stdout, stderr
+log = "~/Library/Logs/web.log"
 
 [ignore]                     # excluded from audit
 launchd = []
@@ -112,6 +134,14 @@ port_cmds = []
 docker_exited = []
 orphan_cmds = []
 ```
+
+## Plugins
+
+```toml
+plugins = ["my-mac-manager/examples/plugins/agent-sessions.mjs", "./plugins/mine.mjs", "foo"]   # bundled example / local file / npm m3-plugin-foo
+```
+
+Scaffold and validate: `m3 plugin new mine --kind service|vault|backup|command`, `m3 plugin check --remote`. Spec: [PLUGINS.md](PLUGINS.md).
 
 ## Development
 

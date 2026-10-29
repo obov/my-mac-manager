@@ -7,15 +7,26 @@ import type { Agent, RemoteFile, Step } from "../types.js";
 import { BAD, BOLD, DIM, OK, WARN, fail, shHome, shq } from "../util.js";
 import type { App } from "./app.js";
 import { cmdCreds, cmdEnv } from "./secrets.js";
+import { renderAgent, renderBrewfile, renderTools } from "./render.js";
 import { cmdLs } from "./status.js";
 
+// writes files into ~/<dir>, removes files deployed last time but no longer wanted (.m3-files.json manifest)
 const WRITE_FILES = `import json,os,sys
 d=os.path.expanduser("~/"+sys.argv[1])
 os.makedirs(d,exist_ok=True)
-for f in json.load(sys.stdin):
+files=json.load(sys.stdin)
+names=[f["name"] for f in files]
+man=os.path.join(d,".m3-files.json")
+try: old=json.load(open(man))
+except (OSError,ValueError): old=[]
+for f in files:
     p=os.path.join(d,f["name"]);t=p+".m3-tmp"
     with open(t,"w") as fh: fh.write(f["content"])
     os.chmod(t,f.get("mode",0o644));os.replace(t,p)
+for n in old:
+    if n not in names and "/" not in n and os.path.isfile(os.path.join(d,n)):
+        os.remove(os.path.join(d,n));print("removed",n)
+json.dump(names,open(man,"w"))
 `;
 
 const marker = (id: string) => id.replace(/[^a-z0-9]/gi, "").toUpperCase() + "Managed";
@@ -33,8 +44,10 @@ export function remoteFiles(app: App): RemoteFile[] {
     { name: `${app.id}-launchd`, content: HELPER_SH.replace(/__ID__/g, app.id).replace(/__MARKER__/g, marker(app.id)), mode: 0o755 },
     { name: "host-settings.sh", content: HOST_SH },
   ];
-  if (H.brewfile) files.push({ name: "Brewfile", content: dataFile(app, H.brewfile) });
-  if (H.tools) files.push({ name: "tools.sh", content: dataFile(app, H.tools), mode: 0o755 });
+  if (app.cfg.brew) files.push({ name: "Brewfile", content: renderBrewfile(app.cfg.brew) });
+  else if (H.brewfile) files.push({ name: "Brewfile", content: dataFile(app, H.brewfile) });
+  if (app.cfg.tools) files.push({ name: "tools.sh", content: renderTools(app.cfg.tools), mode: 0o755 });
+  else if (H.tools) files.push({ name: "tools.sh", content: dataFile(app, H.tools), mode: 0o755 });
   if (H.settings) files.push({ name: "host-settings.local.sh", content: dataFile(app, H.settings) });
   for (const p of app.plugins) files.push(...(p.remoteFiles?.(app.ctx(p)) ?? []));
   if (app.backupPlugin) files.push(...(app.backup().remoteFiles?.() ?? []));
@@ -47,9 +60,9 @@ export function remoteFiles(app: App): RemoteFile[] {
   return files;
 }
 
-/** plists for ~/Library/LaunchAgents: [host].launchd (files / dirs) + plugins + backup */
+/** plists for ~/Library/LaunchAgents: [[projects.<name>.agents]] + [host].launchd (files / dirs) + plugins + backup */
 export function agents(app: App): Agent[] {
-  const out: Agent[] = [];
+  const out: Agent[] = app.projects.flatMap((p) => (p.agents ?? []).map((a: any) => renderAgent(p, a)));
   for (const spec of app.cfg.host?.launchd ?? []) {
     const p = resolve(app.root, spec);
     const list = existsSync(p) && !p.endsWith(".plist") ? readdirSync(p).filter((f) => f.endsWith(".plist")).map((f) => join(p, f)) : [p];
@@ -57,6 +70,11 @@ export function agents(app: App): Agent[] {
   }
   for (const p of app.plugins) out.push(...(p.agents?.(app.ctx(p)) ?? []));
   if (app.backupPlugin) out.push(...(app.backup().agents?.() ?? []));
+  const seen = new Set<string>();
+  for (const a of out) {
+    if (seen.has(a.label)) fail(`launchd label defined twice: ${a.label}`);
+    seen.add(a.label);
+  }
   return out.sort((a, b) => a.label.localeCompare(b.label));
 }
 
@@ -67,7 +85,8 @@ export async function pushFiles(app: App, load: boolean) {
   const files = remoteFiles(app);
   const conf = { id: app.id, dir: R.dir, plan: app.backupPlan(), backup: app.backupPlugin ? app.backup().remoteOptions?.() ?? {} : {} };
   files.push({ name: "config.json", content: JSON.stringify(conf, null, 1), mode: 0o600 });
-  await R.run(`/usr/bin/python3 -I -c ${shq(WRITE_FILES)} ${shq(R.dir)}`, { stdin: JSON.stringify(files) });
+  const removed = (await R.run(`/usr/bin/python3 -I -c ${shq(WRITE_FILES)} ${shq(R.dir)}`, { stdin: JSON.stringify(files) }))!.trim();
+  if (removed) console.log(DIM("  " + removed.split("\n").join(", ")));
   console.log(DIM(`  ${R.host}:~/${R.dir}  ${files.map((f) => f.name).join(", ")}`));
   for (const a of agents(app)) {
     const lb = a.label;
@@ -118,14 +137,14 @@ function bootstrapSteps(app: App, hostname?: string): BStep[] {
       : R.tty('/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"') },
     { desc: "deploy m3 files (scripts, config, plists not loaded)", run: () => pushFiles(app, false) },
   ];
-  if (H.brewfile) steps.push({ desc: "brew bundle", run: run(`eval $(/opt/homebrew/bin/brew shellenv); HOMEBREW_BUNDLE_MAS_SKIP=\${MAS_SKIP:-} brew bundle --file ~/${D}/Brewfile\n`) });
+  if (app.cfg.brew || H.brewfile) steps.push({ desc: "brew bundle", run: run(`eval $(/opt/homebrew/bin/brew shellenv); HOMEBREW_BUNDLE_MAS_SKIP=\${MAS_SKIP:-} brew bundle --file ~/${D}/Brewfile\n`) });
   if (app.backupPlugin) {
     if (app.vaultPlugin) steps.push({ desc: `backup credentials (vault → ~/${R.credDir})`, run: () => cmdCreds(app, "push") });
     steps.push({ desc: "restore secrets (→ $HOME)", run: () => app.backup().restore("secrets", {}) });
   }
   if (app.vaultPlugin) steps.push({ desc: ".env files (vault → target Mac, wins over the backup)", run: () => cmdEnv(app, "pull", [], true) });
   if (app.backupPlugin) steps.push({ desc: "restore dirs (→ $HOME)", run: () => app.backup().restore("dirs", {}) });
-  if (H.tools) steps.push({ desc: "install tools (tools)", run: run(`zsh ~/${D}/tools.sh\n`) });
+  if (app.cfg.tools || H.tools) steps.push({ desc: "install tools", run: run(`zsh ~/${D}/tools.sh\n`) });
   steps.push(
     { desc: "repo clone", run: run("ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null\n" + clones.map(([r, d]) => gitClone(r, d)).join("\n") + "\n") },
     { desc: "apply host settings (sudo)", run: () => R.tty(`sudo ${hostEnv(app, hostname)} sh ~/${D}/host-settings.sh apply`) },
@@ -135,6 +154,7 @@ function bootstrapSteps(app: App, hostname?: string): BStep[] {
   for (const p of app.projects) {
     const cmds: string[] = [];
     if (p.data_restore && app.backupPlugin) cmds.push(app.backup().restoreDataCommand(p.name));
+    if (app.backupPlugin) cmds.push(...(app.backup().projectRestoreCommands?.(p) ?? []));
     cmds.push(...(p.setup ?? []));
     if (!cmds.length) continue;
     const body = `set -e\nexport PATH=${path}:$PATH M3_DIR=$HOME/${D}\n` + cmds.join("\n") + "\n";

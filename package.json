@@ -14,24 +14,29 @@
   },
   "files": [
     "dist",
+    "examples",
     "PLUGINS.md",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "build": "node build.mjs && tsc -p tsconfig.types.json",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm run build"
   },
   "keywords": [
+    "backup",
+    "bitwarden",
+    "filevault",
+    "homelab",
+    "launchd",
+    "m3-plugin",
     "mac",
     "mac-mini",
-    "launchd",
-    "homelab",
-    "backup",
-    "restic",
-    "bitwarden"
+    "restic"
   ],
   "license": "MIT",
   "devDependencies": {

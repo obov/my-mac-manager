@@ -15,7 +15,9 @@ import { BAD, BOLD, DIM, OK, WARN, ask, dur, fail, poll, rel } from "../util.js"
 /** service check order = this order (row order in status) */
 export const BUILTIN_SERVICES: Plugin[] = [launchd, docker, compose, apps, heartbeat, logscan, ports];
 export const BUILTIN_SLOTS: Plugin[] = [bitwarden, restic];
-export const CORE_PROJECT_KEYS = ["desc", "repo", "clone", "gui", "daemon", "secrets", "env", "dirs", "data_backup", "data_restore", "setup"];
+export const CORE_PROJECT_KEYS = ["desc", "repo", "clone", "gui", "daemon", "secrets", "env", "dirs", "data_backup", "data_restore", "setup", "agents"];
+/** root of this package (dist/.. ), for specs like "my-mac-manager/examples/plugins/x.mjs" */
+const PKG_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
 export const ui: UI = { ok: OK, bad: BAD, warn: WARN, dim: DIM, bold: BOLD, dur, ask, poll };
 
@@ -52,7 +54,10 @@ export async function importPlugin(spec: string, root: string): Promise<Plugin> 
   const builtin = [...BUILTIN_SERVICES, ...BUILTIN_SLOTS].find((p) => p.name === spec);
   if (builtin) return builtin;
   let file: string | null = null;
-  if (/^[.~/]/.test(spec)) {
+  if (spec.startsWith("my-mac-manager/")) {
+    file = join(PKG_ROOT, spec.slice("my-mac-manager/".length));
+    if (!existsSync(file)) fail(`plugin file not found in my-mac-manager: ${file}`);
+  } else if (/^[.~/]/.test(spec)) {
     file = resolve(root, spec.startsWith("~/") ? join(homedir(), spec.slice(2)) : spec);
     if (!existsSync(file)) fail(`plugin file not found: ${file}`);
   } else {

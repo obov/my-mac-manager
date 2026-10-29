@@ -5,6 +5,8 @@
 #   m3-restic.py verify                            restore into a temp dir and check (live data untouched)
 #   m3-restic.py restore secrets|dirs [--target DIR]
 #   m3-restic.py restore data <project>             dump → stdin of data_restore
+#   m3-restic.py snapshot --tag T [--host H] [--no-suffix] --paths a,b --target DIR [--force]
+#                                                  copy dirs a, b from the latest snapshot of another backup → DIR
 #   m3-restic.py raw [--no-suffix] -- <restic args>  run restic with credentials and repository applied
 #
 # config: --config-json or config.json next to this file ({"plan": ..., "backup": ...}, written by m3 install)
@@ -163,6 +165,28 @@ def cmd_verify(_):
     return 0 if ok else 1
 
 
+def cmd_snapshot(a):
+    target = os.path.expanduser(a.target)
+    paths = [p for p in a.paths.split(",") if p]
+    if os.path.exists(os.path.join(target, paths[0])) and not a.force:
+        print(f"{target}/{paths[0]} exists → stopping (overwrite: --force)"); return 1
+    tmp = tempfile.mkdtemp(prefix="m3-snapshot-")
+    try:
+        args = ["restore", "latest", "--tag", a.tag, "--target", tmp] + (["--host", a.snap_host] if a.snap_host else [])
+        r = restic(*args, e=env(suffix=not a.no_suffix))
+        if r.returncode:
+            return r.returncode
+        for root, dirs, _ in os.walk(tmp):
+            if all(p in dirs for p in paths):
+                os.makedirs(target, exist_ok=True)
+                for p in paths:
+                    subprocess.run(["/bin/cp", "-R", f"{root}/{p}/", f"{target}/{p}/"], check=True)
+                print("restored", ", ".join(paths), "→", target); return 0
+        print("snapshot does not contain", ", ".join(paths)); return 1
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def cmd_raw(a):
     args = a.args[1:] if a.args[:1] == ["--"] else a.args
     return restic(*args, e=env(suffix=not a.no_suffix)).returncode
@@ -177,6 +201,13 @@ def main():
     r.add_argument("what", choices=["secrets", "dirs", "data"])
     r.add_argument("name", nargs="?")
     r.add_argument("--target")
+    sn = sub.add_parser("snapshot")
+    sn.add_argument("--tag", required=True)
+    sn.add_argument("--host", dest="snap_host")
+    sn.add_argument("--no-suffix", action="store_true")
+    sn.add_argument("--paths", required=True)
+    sn.add_argument("--target", required=True)
+    sn.add_argument("--force", action="store_true")
     raw = sub.add_parser("raw")
     raw.add_argument("--no-suffix", action="store_true")
     raw.add_argument("args", nargs=argparse.REMAINDER)

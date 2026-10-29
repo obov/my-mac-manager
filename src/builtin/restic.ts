@@ -1,5 +1,5 @@
 import RESTIC_PY from "../assets/restic.py";
-import type { Backup, Context, CredState, Plugin } from "../types.js";
+import type { Backup, Context, CredState, Plugin, Project } from "../types.js";
 import { isUpperKey, sha256, shq } from "../util.js";
 
 const SCRIPT = "m3-restic.py";
@@ -88,6 +88,23 @@ class Restic implements Backup {
     return `/usr/bin/python3 -I ~/${this.ctx.remote.dir}/${SCRIPT} restore data ${shq(name)}`;
   }
 
+  /** restore_snapshot = { tag, host, repo_suffix = false, paths, target } → snapshot command args */
+  snapshotArgs(p: Project, force = false): string[] {
+    const s = p.restore_snapshot;
+    if (!s?.tag || !Array.isArray(s.paths) || !s.paths.length || !s.target)
+      this.ctx.fail(`projects.${p.name}.restore_snapshot: { tag, paths = [...], target } required (host, repo_suffix = false optional)`);
+    return ["snapshot", "--tag", s.tag, ...(s.host ? ["--host", s.host] : []), ...(s.repo_suffix === false ? ["--no-suffix"] : []),
+      "--paths", s.paths.join(","), "--target", s.target, ...(force ? ["--force"] : [])];
+  }
+
+  projectRestoreCommands(p: Project) {
+    return p.restore_snapshot ? [`/usr/bin/python3 -I ~/${this.ctx.remote.dir}/${SCRIPT} ` + this.snapshotArgs(p).map(shq).join(" ")] : [];
+  }
+
+  async restoreSnapshot(p: Project, force: boolean) {
+    return this.ctx.remote.pythonLive(RESTIC_PY, ["--config-json", this.conf(), ...this.snapshotArgs(p, force)]);
+  }
+
   async writeCredentials(kv: Record<string, string>) {
     const R = this.ctx.remote, d = `~/${R.credDir}`;
     const pw = kv.RESTIC_PASSWORD;
@@ -131,5 +148,17 @@ const plugin: Plugin = {
   name: "restic",
   description: "restic backup (any restic repository: S3, R2, B2, SFTP, ...)",
   backup: (ctx) => new Restic(ctx),
+  projectKeys: ["restore_snapshot"],
+  commands: [{
+    name: "restore-snapshot",
+    summary: "copy dirs from the latest snapshot of another restic backup (restore_snapshot) into place",
+    usage: "m3 restore-snapshot <project> [--force]",
+    options: { force: { type: "boolean" } },
+    run: async (ctx, a) => {
+      const p = ctx.projects.find((x) => x.name === a.positionals[0]) ?? ctx.fail("usage: m3 restore-snapshot <project> [--force]");
+      if (!p.restore_snapshot) ctx.fail(`projects.${p.name} has no restore_snapshot`);
+      return (ctx.backup() as Restic).restoreSnapshot(p, !!a.values.force);
+    },
+  }],
 };
 export default plugin;

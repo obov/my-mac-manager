@@ -21,6 +21,8 @@ export default {
 
 Scaffold: `m3 plugin new <name> --kind service|vault|backup|command` → `plugins/<name>.mjs`
 
+Full example: [examples/plugins/agent-sessions.mjs](examples/plugins/agent-sessions.mjs) (collector, commands, remote file, launchd agent, reboot hook). Use it directly with `plugins = ["my-mac-manager/examples/plugins/agent-sessions.mjs"]`.
+
 ## 2. Loading (m3.toml)
 
 | Setting | Meaning |
@@ -31,7 +33,7 @@ Scaffold: `m3 plugin new <name> --kind service|vault|backup|command` → `plugin
 | `[plugin.<name>]` | settings for that plugin → `ctx.options` |
 
 How `use` / `plugins` values resolve:
-1. Builtin names: `bitwarden`, `restic`, `launchd`, `docker`, `compose`, `apps`, `heartbeat`, `logscan`, `ports`
+1. Builtin names: `bitwarden`, `restic`, `launchd`, `docker`, `compose`, `apps`, `heartbeat`, `logscan`, `ports`. `my-mac-manager/<path>`: a file shipped with m3 (e.g. `examples/plugins/...`)
 2. Starts with `.`, `/` or `~`: file path relative to m3.toml
 3. Anything else: an npm package. `foo` → tries `m3-plugin-foo` first, then `foo`. Searched in `node_modules` of the m3.toml directory, then next to the m3 install (for global installs: `npm i -g m3-plugin-foo`)
 
@@ -112,6 +114,7 @@ backup: (ctx) => ({
   async run(action) {},                   // "now" | "snapshots" | "verify" | "log" → exit code
   async restore(what, { name, target }) {},  // "secrets" | "dirs" | "data"
   restoreDataCommand(name) {},            // shell command the target Mac runs before a project's setup during bootstrap
+  projectRestoreCommands(project) {},     // optional: more restore commands for a project (e.g. restic restore_snapshot)
   remoteFiles() {}, remoteOptions() {}, agents() {},   // optional: files to install / backup value in config.json / scheduled plist
 })
 ```
