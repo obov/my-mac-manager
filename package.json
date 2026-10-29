@@ -1,0 +1,43 @@
+{
+  "name": "my-mac-manager",
+  "version": "0.1.0",
+  "description": "Manage a headless Mac (mini, EC2 Mac) from another machine: status, control, backup, reboot, bootstrap. Pluggable vault, backup and service checks.",
+  "type": "module",
+  "bin": {
+    "m3": "dist/m3.js"
+  },
+  "exports": {
+    "./plugin": {
+      "types": "./dist/types/plugin.d.ts",
+      "default": "./dist/plugin.js"
+    }
+  },
+  "files": [
+    "dist",
+    "PLUGINS.md",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node build.mjs && tsc -p tsconfig.types.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "mac",
+    "mac-mini",
+    "launchd",
+    "homelab",
+    "backup",
+    "restic",
+    "bitwarden"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "esbuild": "^0.28.2",
+    "smol-toml": "^1.9.1",
+    "typescript": "^7.0.2"
+  }
+}
