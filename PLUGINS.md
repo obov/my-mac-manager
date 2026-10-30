@@ -21,7 +21,7 @@ export default {
 
 Scaffold: `m3 plugin new <name> --kind service|vault|backup|command` → `plugins/<name>.mjs`
 
-Full example: [examples/plugins/agent-sessions.mjs](examples/plugins/agent-sessions.mjs) (collector, commands, remote file, launchd agent, reboot hook). Use it directly with `plugins = ["my-mac-manager/examples/plugins/agent-sessions.mjs"]`.
+Full examples: [examples/plugins/agent-sessions.mjs](examples/plugins/agent-sessions.mjs) (collector, commands, remote file, launchd agent, reboot hook), [examples/plugins/alert.mjs](examples/plugins/alert.mjs) (service row, remote script + config, SQLite on the target Mac). Use it directly with `plugins = ["my-mac-manager/examples/plugins/agent-sessions.mjs"]`.
 
 ## 2. Loading (m3.toml)
 

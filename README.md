@@ -143,6 +143,13 @@ plugins = ["my-mac-manager/examples/plugins/agent-sessions.mjs", "./plugins/mine
 
 Scaffold and validate: `m3 plugin new mine --kind service|vault|backup|command`, `m3 plugin check --remote`. Spec: [PLUGINS.md](PLUGINS.md).
 
+Bundled plugins (opt-in, settings at the top of each file):
+
+| Plugin | Adds |
+|---|---|
+| `examples/plugins/agent-sessions.mjs` | stale agent browsers, Claude session activity, reboot warning (`m3 stale`, `m3 reap`) |
+| `examples/plugins/alert.mjs` | error mails sent by apps on the target Mac (`m3-alert.py send` / `run`) or from watched logs; events and delivery kept in SQLite (`m3 alert`, `alert` row in `m3 status`) |
+
 ## Development
 
 ```sh
