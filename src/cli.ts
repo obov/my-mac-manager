@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { App, findConfig } from "./core/app.js";
 import { cmdPluginCheck, cmdPluginList, cmdPluginNew, cmdInit } from "./core/plugincmd.js";
@@ -59,11 +60,13 @@ function need(v: string | undefined, what: string): string {
 const width = (s: string) => [...s].reduce((n, ch) => n + (/[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\uff00-\uff60]/.test(ch) ? 2 : 1), 0);
 
 function version() {
+  let v = "?";
   try {
-    return JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
-  } catch {
-    return "?";
-  }
+    v = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+  } catch {}
+  // running from a source checkout (not an npm install) → show where
+  const root = fileURLToPath(new URL("..", import.meta.url)).replace(/\/$/, "");
+  return root.split("/").includes("node_modules") ? v : `${v} (dev: ${root})`;
 }
 
 function help(app: App | null, configPath: string | null) {

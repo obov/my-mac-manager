@@ -150,4 +150,7 @@ npm i
 npm run build        # dist/m3.js (single bundle), dist/plugin.js, dist/types
 npm run typecheck
 node dist/m3.js --config ../my-mac/m3.toml
+ln -sf "$PWD/dist/m3.js" ~/.local/bin/m3-dev   # optional: local build as m3-dev, next to the npm m3
 ```
+
+`m3 -v` on a source checkout prints `<version> (dev: <path>)`.
