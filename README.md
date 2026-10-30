@@ -148,6 +148,7 @@ Bundled plugins (opt-in, settings at the top of each file):
 | Plugin | Adds |
 |---|---|
 | `examples/plugins/agent-sessions.mjs` | stale agent browsers, Claude session activity, reboot warning (`m3 stale`, `m3 reap`) |
+| `examples/plugins/deploy.mjs` | `m3 deploy <project>`: fast-forward the target Mac clone to the pushed branch, run `deploy.steps`, `deploy.check`, roll back on failure |
 | `examples/plugins/alert.mjs` | error mails sent by apps on the target Mac (`m3-alert.py send` / `run`) or from watched logs; events and delivery kept in SQLite (`m3 alert`, `alert` row in `m3 status`) |
 
 ## Development
